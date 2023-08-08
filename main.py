@@ -1,10 +1,12 @@
 import asyncio
+import json
 import logging
 from aiogram import Bot, Dispatcher, types, html, F
 from aiogram.filters.command import Command, CommandObject
 from aiogram.enums.dice_emoji import DiceEmoji
 from aiogram.types import FSInputFile, URLInputFile, BufferedInputFile
 from aiogram.utils.markdown import hide_link
+from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from config_reader import config
 from datetime import datetime
 
@@ -12,19 +14,43 @@ from datetime import datetime
 logging.basicConfig(level=logging.INFO)
 
 # Объект бота
-# Для записей с типом Secret* необходимо
-# вызывать метод get_secret_value(),
+# Для записей с типом Secret* необходимо вызывать метод get_secret_value(),
 # чтобы получить настоящее содержимое вместо '*******'
-# bot = Bot(token=config.BOT_API_TOKEN)
 bot = Bot(token=config.bot_token.get_secret_value(), parse_mode='HTML')
 # Диспетчер
 dp = Dispatcher()
 
 
 # Хэндлер на команду /start
+# При старте организуем обычную клавиатуру с обычными кнопками
+# (kb - массив массивов, а если проще - массив рядов кнопок)
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
-    await message.answer("Hello, <u>world</u>!")
+    kb = [
+        [
+            types.KeyboardButton(text="С пюрешкой"),
+            types.KeyboardButton(text="Без пюрешки")
+        ]
+    ]
+    keyboard = types.ReplyKeyboardMarkup(
+        keyboard=kb,
+        resize_keyboard=True,  # для уменьшения кнопок до приемлемого размера
+        input_field_placeholder="Выберите способ подачи"
+    )
+    await message.answer("С чем подавать <u>котлеты</u>?", reply_markup=keyboard)
+    json_str = json.dumps(message.model_dump(), default=str)
+    print(json_str)
+
+
+@dp.message(F.text == "С пюрешкой")
+async def with_puree(message: types.Message):
+    await message.reply("Отличный выбор!", reply_markup=types.ReplyKeyboardRemove())
+    json_str = json.dumps(message.model_dump(), default=str)
+    print(json_str)
+
+@dp.message(F.text == "Без пюрешки")
+async def with_puree(message: types.Message):
+    await message.reply("Так невкусно!", reply_markup=types.ReplyKeyboardRemove())
 
 
 # Хэндлер на команду /name, выводит введенное значение (параметр) после команды
@@ -35,6 +61,65 @@ async def cmd_name(message: types.Message, command: CommandObject):
     else:
         await message.answer("Пожалуйста, укажите своё имя после команды /name!")
 
+# Хэндлер для иллюстрации построения обычных кнопок через reply_builder
+@dp.message(Command("reply_builder"))
+async def reply_builder(message: types.Message):
+    builder = ReplyKeyboardBuilder()
+    for i in range(1, 17):
+        builder.add(types.KeyboardButton(text=str(i)))
+    builder.adjust(4)
+    await message.answer(
+        "Выберите число:",
+        reply_markup=builder.as_markup(resize_keyboard=True),
+    )
+
+# Хэндлер для иллюстрации работы специальных кнопок
+@dp.message(Command("special_buttons"))
+async def cmd_special_buttons(message: types.Message):
+    builder = ReplyKeyboardBuilder()
+    # метод row позволяет явным образом сформировать ряд
+    # из одной или нескольких кнопок. Например, первый ряд
+    # будет состоять из двух кнопок...
+    builder.row(
+        types.KeyboardButton(text="Запросить геолокацию", request_location=True),
+        types.KeyboardButton(text="Запросить контакт", request_contact=True)
+    )
+    # ... второй из одной ...
+    builder.row(types.KeyboardButton(
+        text="Создать викторину",
+        request_poll=types.KeyboardButtonPollType(type="quiz"))
+    )
+    # ... а третий снова из двух
+    builder.row(
+        types.KeyboardButton(
+            text="Выбрать премиум пользователя",
+            request_user=types.KeyboardButtonRequestUser(
+                request_id=1,
+                user_is_premium=True
+            )
+        ),
+        types.KeyboardButton(
+            text="Выбрать супергруппу с форумами",
+            request_chat=types.KeyboardButtonRequestChat(
+                request_id=2,
+                chat_is_channel=False,
+                chat_is_forum=True
+            )
+        )
+    )
+    await message.answer(
+        "Выберите действие:",
+        reply_markup=builder.as_markup(resize_keyboard=True)
+    )
+    json_str = json.dumps(message.model_dump(), default=str)
+    print(json_str)
+
+
+@dp.message(F.contact)
+async def request_contact(message: types.Message):
+    await message.reply("Ваш контакт!", reply_markup=types.ReplyKeyboardRemove())
+    json_str = json.dumps(message.model_dump(), default=str)
+    print(json_str)
 
 # # Хэндлер для примера работы с выводом дополнительной информации, например, текущего времени
 # @dp.message(F.text)
@@ -76,6 +161,7 @@ async def upload_photo(message: types.Message):
         f"Спрятанная *ссылка*:\n"
     )
 
+
 # Хэндлер для скачивания изображения с контент-тайпом photo (скачиваем в папку /tmp с расширением .jpg)
 @dp.message(F.photo)
 async def download_photo(message: types.Message, bot: Bot):
@@ -85,6 +171,7 @@ async def download_photo(message: types.Message, bot: Bot):
         destination=f"/tmp/{message.photo[-1].file_id}.jpg"
     )
 
+
 # Хэндлер для скачивания стикеров с контент-тайпом sticker (скачиваем в папку /tmp с расширением .webp)
 @dp.message(F.sticker)
 async def download_sticker(message: types.Message, bot: Bot):
@@ -93,6 +180,7 @@ async def download_sticker(message: types.Message, bot: Bot):
         # для Windows пути надо подправить
         destination=f"/tmp/{message.sticker.file_id}.webp"
     )
+
 
 # Хэндлер для обработки gif-анимации
 @dp.message(F.animation)
@@ -128,7 +216,9 @@ async def upload_photo(message: types.Message):
     file_ids.append(result.photo[-1].file_id)
 
     # Отправка файла по ссылке
-    image_from_url = URLInputFile("https://sdelanounas.ru/i/d/3/d/d3d3Lm1vcy5ydS91cGxvYWQvbmV3c2ZlZWQvYXJ0aWNsZXMvNDA5Ni0yNzMxLW1heF8oMikoMjUpLmpwZz9fX2lkPTE1MzE4OQ==.jpg", bot)
+    image_from_url = URLInputFile(
+        "https://sdelanounas.ru/i/d/3/d/d3d3Lm1vcy5ydS91cGxvYWQvbmV3c2ZlZWQvYXJ0aWNsZXMvNDA5Ni0yNzMxLW1heF8oMikoMjUpLmpwZz9fX2lkPTE1MzE4OQ==.jpg",
+        bot)
     result = await message.answer_photo(
         image_from_url,
         caption="Изображение по ссылке"
