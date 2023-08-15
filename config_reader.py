@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     # Желательно вместо str использовать SecretStr
     # для конфиденциальных данных, например, токена бота
     bot_token: SecretStr
+    admin_id: int
 
     # Вложенный класс с дополнительными указаниями для настроек
     class Config:

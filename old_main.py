@@ -1,25 +1,31 @@
 import asyncio
 import json
 import logging
+from random import randint
+
 from aiogram import Bot, Dispatcher, types, html, F
 from aiogram.filters.command import Command, CommandObject
 from aiogram.enums.dice_emoji import DiceEmoji
 from aiogram.types import FSInputFile, URLInputFile, BufferedInputFile
 from aiogram.utils.markdown import hide_link
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
+from aiogram.utils.keyboard import ReplyKeyboardBuilder, InlineKeyboardBuilder
 from config_reader import config
+from typing import Dict
 from datetime import datetime
+from contextlib import suppress
+from aiogram.exceptions import TelegramBadRequest
+from typing import Optional
+from aiogram.filters.callback_data import CallbackData
 
-# Включаем логгирование, чтобы не пропустить важные сообщения
-logging.basicConfig(level=logging.INFO)
+# Диспетчер
+dp = Dispatcher()
 
 # Объект бота
 # Для записей с типом Secret* необходимо вызывать метод get_secret_value(),
 # чтобы получить настоящее содержимое вместо '*******'
 bot = Bot(token=config.bot_token.get_secret_value(), parse_mode='HTML')
-# Диспетчер
-dp = Dispatcher()
 
+user_data = {}
 
 # Хэндлер на команду /start
 # При старте организуем обычную клавиатуру с обычными кнопками
@@ -38,15 +44,16 @@ async def cmd_start(message: types.Message):
         input_field_placeholder="Выберите способ подачи"
     )
     await message.answer("С чем подавать <u>котлеты</u>?", reply_markup=keyboard)
-    json_str = json.dumps(message.model_dump(), default=str)
-    print(json_str)
+    # json_str = json.dumps(message.model_dump(), default=str)
+    # print(json_str)
 
 
 @dp.message(F.text == "С пюрешкой")
 async def with_puree(message: types.Message):
     await message.reply("Отличный выбор!", reply_markup=types.ReplyKeyboardRemove())
-    json_str = json.dumps(message.model_dump(), default=str)
-    print(json_str)
+    # json_str = json.dumps(message.model_dump(), default=str)
+    # print(json_str)
+
 
 @dp.message(F.text == "Без пюрешки")
 async def with_puree(message: types.Message):
@@ -61,6 +68,7 @@ async def cmd_name(message: types.Message, command: CommandObject):
     else:
         await message.answer("Пожалуйста, укажите своё имя после команды /name!")
 
+
 # Хэндлер для иллюстрации построения обычных кнопок через reply_builder
 @dp.message(Command("reply_builder"))
 async def reply_builder(message: types.Message):
@@ -72,6 +80,7 @@ async def reply_builder(message: types.Message):
         "Выберите число:",
         reply_markup=builder.as_markup(resize_keyboard=True),
     )
+
 
 # Хэндлер для иллюстрации работы специальных кнопок
 @dp.message(Command("special_buttons"))
@@ -111,15 +120,198 @@ async def cmd_special_buttons(message: types.Message):
         "Выберите действие:",
         reply_markup=builder.as_markup(resize_keyboard=True)
     )
-    json_str = json.dumps(message.model_dump(), default=str)
-    print(json_str)
+    # json_str = json.dumps(message.model_dump(), default=str)
+    # print(json_str)
 
 
+# Хэндлер для обработки запроса контакта
 @dp.message(F.contact)
 async def request_contact(message: types.Message):
     await message.reply("Ваш контакт!", reply_markup=types.ReplyKeyboardRemove())
-    json_str = json.dumps(message.model_dump(), default=str)
-    print(json_str)
+    # json_str = json.dumps(message.model_dump(), default=str)
+    # print(json_str)
+
+
+# Хэндлер для обработки команды inline_url - рисования инлайн-кнопок
+@dp.message(Command("inline_url"))
+async def cmd_inline_url(message: types.Message, bot: Bot):
+    builder = InlineKeyboardBuilder()
+    builder.row(types.InlineKeyboardButton(
+        text="GitHub", url="https://github.com")
+    )
+    builder.row(types.InlineKeyboardButton(
+        text="Оф. канал Telegram",
+        url="tg://resolve?domain=telegram")
+    )
+
+    # Чтобы иметь возможность показать ID-кнопку,
+    # У юзера должен быть False флаг has_private_forwards
+    user_id = 1189184041
+    chat_info = await bot.get_chat(user_id)
+    if not chat_info.has_private_forwards:
+        builder.row(types.InlineKeyboardButton(
+            text="Какой-то пользователь",
+            url=f"tg://user?id={user_id}")
+        )
+
+    await message.answer(
+        'Выберите ссылку',
+        reply_markup=builder.as_markup(),
+    )
+
+
+# Хэндлер, который строит callback-кнопку
+@dp.message(Command("random"))
+async def cmd_random(message: types.Message):
+    builder = InlineKeyboardBuilder()
+    builder.add(types.InlineKeyboardButton(
+        text="Нажми меня",
+        callback_data="random_value")
+    )
+    await message.answer(
+        "Нажмите на кнопку, чтобы бот отправил число от 1 до 10",
+        reply_markup=builder.as_markup()
+    )
+
+
+# Хэндлер, обработчик нажатия на callback-кнопку
+@dp.callback_query(F.data == "random_value")
+async def send_random_value(callback: types.CallbackQuery):
+    await callback.message.answer(str(randint(1, 10)))
+    result = await get_data_message(callback.model_dump())
+    for key, value in result.items():
+        print(f'{key} - {value}')
+
+
+def get_keyboard():
+    buttons = [
+        [
+            types.InlineKeyboardButton(text="-1", callback_data="num_decr"),
+            types.InlineKeyboardButton(text="+1", callback_data="num_incr")
+        ],
+        [types.InlineKeyboardButton(text="Подтвердить", callback_data="num_finish")]
+    ]
+    keyboard = types.InlineKeyboardMarkup(inline_keyboard=buttons)
+    return keyboard
+
+
+async def update_num_text(message: types.Message, new_value: int):
+    with suppress(TelegramBadRequest):
+        await message.edit_text(
+            f"Укажите число: {new_value}",
+            reply_markup=get_keyboard()
+        )
+
+
+@dp.message(Command("numbers"))
+async def cmd_numbers(message: types.Message):
+    user_data[message.from_user.id] = 0
+    await message.answer("Укажите число: 0", reply_markup=get_keyboard())
+
+
+@dp.callback_query(F.data.startswith("num_"))
+async def callbacks_num(callback: types.CallbackQuery):
+    user_value = user_data.get(callback.from_user.id, 0)
+    action = callback.data.split("_")[1]
+
+    if action == "incr":
+        user_data[callback.from_user.id] = user_value+1
+        await update_num_text(callback.message, user_value+1)
+    elif action == "decr":
+        user_data[callback.from_user.id] = user_value-1
+        await update_num_text(callback.message, user_value-1)
+    elif action == "finish":
+        await callback.message.edit_text(f"Итого: {user_value}")
+
+    await callback.answer()
+
+
+class NumbersCallbackFactory(CallbackData, prefix="fabnum"):
+    action: str
+    value: Optional[int]
+
+
+def get_keyboard_fab():
+    builder = InlineKeyboardBuilder()
+    builder.button(
+        text="-2", callback_data=NumbersCallbackFactory(action="change", value=-2)
+    )
+    builder.button(
+        text="-1", callback_data=NumbersCallbackFactory(action="change", value=-1)
+    )
+    builder.button(
+        text="+1", callback_data=NumbersCallbackFactory(action="change", value=1)
+    )
+    builder.button(
+        text="+2", callback_data=NumbersCallbackFactory(action="change", value=2)
+    )
+    builder.button(
+        text="Подтвердить", callback_data=NumbersCallbackFactory(action="finish", value=3)
+    )
+    # Выравниваем кнопки по 4 в ряд, чтобы получилось 4 + 1
+    builder.adjust(4)
+    return builder.as_markup()
+
+
+async def update_num_text_fab(message: types.Message, new_value: int):
+    with suppress(TelegramBadRequest):
+        await message.edit_text(
+            f"Укажите число: {new_value}",
+            reply_markup=get_keyboard_fab()
+        )
+
+
+@dp.message(Command("numbers_fab"))
+async def cmd_numbers_fab(message: types.Message):
+    user_data[message.from_user.id] = 0
+    await message.answer("Укажите число: 0", reply_markup=get_keyboard_fab())
+
+
+# Нажатие на одну из кнопок: -2, -1, +1, +2
+@dp.callback_query(NumbersCallbackFactory.filter(F.action == "change"))
+async def callbacks_num_change_fab(
+        callback: types.CallbackQuery,
+        callback_data: NumbersCallbackFactory
+):
+    # Текущее значение
+    user_value = user_data.get(callback.from_user.id, 0)
+
+    user_data[callback.from_user.id] = user_value + callback_data.value
+    await update_num_text_fab(callback.message, user_value + callback_data.value)
+    await callback.answer()
+
+
+# Нажатие на кнопку "подтвердить"
+@dp.callback_query(NumbersCallbackFactory.filter(F.action == "finish"))
+async def callbacks_num_finish_fab(callback: types.CallbackQuery):
+    # Текущее значение
+    user_value = user_data.get(callback.from_user.id, 0)
+
+    await callback.message.edit_text(f"Итого: {user_value}")
+    await callback.answer()
+
+
+async def get(message: types.Message):
+    data_message = message.model_dump()
+    print(json.dumps(data_message, default=str))
+    result_data_message = await get_data_message(data_message=data_message)
+    for key, value in result_data_message.items():
+        print(f'{key} - {value}')
+        if isinstance(value, str):
+            print(f'Используя magic filter к данным {key} можно обратиться через через F.{key} == "{value}"')
+        elif isinstance(value, int):
+            print(f'Используя magic filter к данным {key} можно обратиться через через F.{key} == {value}')
+
+
+async def get_data_message(data_message: Dict, prefix: str = '', sep: str = ''):
+    correct_dict = {}
+    for key, value in data_message.items():
+        if isinstance(value, Dict):
+            correct_dict.update(await get_data_message(data_message=value, prefix=f'{prefix}{key}{sep}'))
+        else:
+            correct_dict[f'{prefix}{key}'] = value
+    return correct_dict
+
 
 # # Хэндлер для примера работы с выводом дополнительной информации, например, текущего времени
 # @dp.message(F.text)
@@ -255,7 +447,15 @@ async def cmd_dice(message: types.Message):
 
 
 async def main():
-    await dp.start_polling(bot)
+    # Включаем логгирование, чтобы не пропустить важные сообщения
+    logging.basicConfig(level=logging.INFO)
+
+    dp.message.register(get)
+    # dp.callback_query.register(send_random_value)
+    try:
+        await dp.start_polling(bot)
+    finally:
+        await bot.session.close()
 
 
 if __name__ == "__main__":

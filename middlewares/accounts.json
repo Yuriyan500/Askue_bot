@@ -1,0 +1,14 @@
+[
+    {
+    "chat_id": -950488948,
+    "user_id": 1189184041,
+    "is_bot": false,
+    "username": "Yanshalinov"
+    },
+    {
+      "chat_id": -950488948,
+      "user_id": 6618997857,
+      "is_bot": true,
+      "username": "El_Askue_bot"
+    }
+]
