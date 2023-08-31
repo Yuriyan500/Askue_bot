@@ -7,6 +7,15 @@ class Settings(BaseSettings):
     # для конфиденциальных данных, например, токена бота
     bot_token: SecretStr
     admin_id: int
+    db_server: str
+    db_port: str
+    db_base: str
+    db_user: str
+    db_pwd: str
+    odbc_driver: str
+    trust_server_certificate: str
+    trusted_connection: str
+
 
     # Вложенный класс с дополнительными указаниями для настроек
     class Config:

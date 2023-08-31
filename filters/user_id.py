@@ -12,6 +12,6 @@ class UserIdFilter(BaseFilter):
         if isinstance(self.user_id, int):
             return message.from_user.id == self.user_id
         else:
-            print('user_id filter', self.user_id)
-            print('message.from_user.id', message.from_user.id)
+            # print('user_id filter', self.user_id)
+            # print('message.from_user.id', message.from_user.id)
             return message.from_user.id in self.user_id

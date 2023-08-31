@@ -1,5 +1,8 @@
 aiogram==3.0.0b9
 python-dotenv==0.21.1
-
+pyodbc=4.0.39
+sqlalchemy=2.0.20
 pydantic~=2.1.1
 pydantic_settings=2.0.2
+pyodbc~=4.0.39
+SQLAlchemy~=2.0.20

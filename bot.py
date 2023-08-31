@@ -3,15 +3,23 @@ import json
 import logging
 
 from aiogram import Bot, Dispatcher, F, types
+from aiogram.filters import Command
+
+from typing import Dict
 
 from config_reader import config
 from handlers import questions, different_types
-from typing import Dict
-from handlers.basic import get_start
+from handlers.basic import get_meters
+from handlers.callback import select_meters_commands
+from utils.commands import set_commands
+from utils.callbackdata import MetersInfo
+from middlewares.counter import CounterMiddleware
 
 
 async def start_bot(bot: Bot):
+    await set_commands(bot)
     await bot.send_message(config.admin_id, text='Бот запущен')
+
 
 async def stop_bot(bot: Bot):
     await bot.send_message(config.admin_id, text='Бот остановлен')
@@ -52,11 +60,19 @@ async def main():
     # Диспетчер
     dp = Dispatcher()
 
+    # Мидлварь необходимо регистрировать ранее, чем хэндлеры
+    dp.message.middleware.register(CounterMiddleware())
+
     dp.startup.register(start_bot)
     dp.shutdown.register(stop_bot)
 
-    # dp.message.register(get_start)
+    # Обработчик команды вызова инлайн-клавиатуры по счетчикам meters
+    dp.message.register(get_meters, Command(commands='meters'))
 
+    # Обработчик на нажатие кнопок инлайн-клавиатуры meters
+    dp.callback_query.register(select_meters_commands, MetersInfo.filter())  # без фильтра
+
+    # Регистрируем роутеры в диспетчере, которые отработают, если фильтры выше не сработали
     dp.include_router(questions.router)
     dp.include_router(different_types.router)
 

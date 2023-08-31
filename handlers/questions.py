@@ -12,7 +12,8 @@ users_id = get_users_id()
 router.message.filter(UserIdFilter(users_id))
 
 @router.message(Command("start"))
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, counter: str):
+    await message.answer(f'Сообщение №{counter}')
     await message.answer(
         "Вы довольны своей работой?",
         reply_markup=get_yes_no_kb()
