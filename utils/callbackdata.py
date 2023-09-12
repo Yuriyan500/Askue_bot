@@ -1,5 +1,10 @@
 from aiogram.filters.callback_data import CallbackData
+from typing import Optional
 
 
 class MetersInfo(CallbackData, prefix='meters'):
-    meter_number: str
+    meter_command: Optional[str] = ''
+    meter_serial: Optional[str] = ''
+    meter_id_uspd: Optional[int] = 0
+    meter_id_channel: Optional[int] = 0
+    meter_id_pp: Optional[int] = 0

@@ -3,17 +3,27 @@ import json
 import logging
 
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.filters import Command
+from aiogram.filters import Command, StateFilter
+from aiogram.types import Message
 
 from typing import Dict
 
 from config_reader import config
 from handlers import questions, different_types
-from handlers.basic import get_meters
-from handlers.callback import select_meters_commands
+from handlers.basic import get_meters_commands
+from handlers.callback import select_meters_commands, get_meters_serial, get_meters_value, write_meters_value
 from utils.commands import set_commands
 from utils.callbackdata import MetersInfo
 from middlewares.counter import CounterMiddleware
+from utils.MetersEntriesStates import MetersEntries
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import default_state
+
+# Инициализируем хранилище (создаем экземпляр класса MemoryStorage)
+storage: MemoryStorage = MemoryStorage()
+# Создаем объект диспетчера
+dp: Dispatcher = Dispatcher(storage=storage)
 
 
 async def start_bot(bot: Bot):
@@ -23,6 +33,26 @@ async def start_bot(bot: Bot):
 
 async def stop_bot(bot: Bot):
     await bot.send_message(config.admin_id, text='Бот остановлен')
+
+
+# Этот хэндлер будет срабатывать на команду "/cancel" в состоянии
+# по умолчанию и сообщать, что эта команда работает внутри машины состояний
+@dp.message(Command(commands='cancel'), StateFilter(default_state))
+async def process_cancel_command(message: Message):
+    await message.answer(text='Отменять нечего. Вы вне машины состояний\n\n'
+                              'Чтобы перейти к командам счетчиков - '
+                              'отправьте команду /meters или выберите нужный пункт меню')
+
+
+# Этот хэндлер будет срабатывать на команду "/cancel" в любых состояниях,
+# кроме состояния по умолчанию, и отключать машину состояний
+@dp.message(Command(commands='cancel'), ~StateFilter(default_state))
+async def process_cancel_command_state(message: Message, state: FSMContext):
+    await message.answer(text='Вы вышли из машины состояний\n\n'
+                              'Чтобы снова перейти к командам счетчиков - '
+                              'отправьте команду /meters или выберите нужный пункт меню')
+    # Сбрасываем состояние и очищаем данные, полученные внутри состояний
+    await state.clear()
 
 
 async def get(message: types.Message):
@@ -57,8 +87,9 @@ async def main():
     # чтобы получить настоящее содержимое вместо '*******'
     bot = Bot(token=config.bot_token.get_secret_value(), parse_mode='HTML')
 
-    # Диспетчер
-    dp = Dispatcher()
+    # storage: MemoryStorage = MemoryStorage()
+    # # Диспетчер
+    # dp = Dispatcher(storage=storage)
 
     # Мидлварь необходимо регистрировать ранее, чем хэндлеры
     dp.message.middleware.register(CounterMiddleware())
@@ -67,10 +98,20 @@ async def main():
     dp.shutdown.register(stop_bot)
 
     # Обработчик команды вызова инлайн-клавиатуры по счетчикам meters
-    dp.message.register(get_meters, Command(commands='meters'))
+    dp.message.register(get_meters_commands, Command(commands='meters'))
 
     # Обработчик на нажатие кнопок инлайн-клавиатуры meters
-    dp.callback_query.register(select_meters_commands, MetersInfo.filter())  # без фильтра
+    dp.callback_query.register(select_meters_commands, MetersInfo.filter(), StateFilter(default_state))
+
+    # Обработчик выбора кнопки инлайн-клавиатуры с серийными номерами счетчиков
+    dp.callback_query.register(get_meters_serial, MetersInfo.filter(), StateFilter(MetersEntries.get_meter_serial))
+
+    # Обработчик выбора кнопки инлайн-клавиатуры с показателями выбранного по серийнику счетчика
+    dp.callback_query.register(get_meters_value, MetersInfo.filter(),
+                               StateFilter(MetersEntries.get_meter_parameter))
+
+    # Обработчик ввода цифрового значения - выбранного показателя счетчика
+    dp.message.register(write_meters_value, StateFilter(MetersEntries.get_meter_value))
 
     # Регистрируем роутеры в диспетчере, которые отработают, если фильтры выше не сработали
     dp.include_router(questions.router)
