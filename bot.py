@@ -26,6 +26,8 @@ storage: MemoryStorage = MemoryStorage()
 dp: Dispatcher = Dispatcher(storage=storage)
 
 
+# TODO - необходимо сделать механизм проверки прав пользователя на работу с БД
+
 async def start_bot(bot: Bot):
     await set_commands(bot)
     await bot.send_message(config.admin_id, text='Бот запущен')

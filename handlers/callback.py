@@ -7,6 +7,10 @@ from aiogram.fsm.context import FSMContext
 from keyboards.meters_keyboards import get_meters_serial_keyboard, get_meters_parameter_keyboard
 
 
+# TODO - вынести тексты всех запросов в отдельный модуль
+# TODO - добавить проверки на вводимые в машине состояний данные (текст, либо цифры, либо еще что)
+
+
 # Функция определяет, какая кнопка главного меню работы со счетчиками нажата,
 # и в зависимости от этого вызывает нужную функцию второго уровня
 async def select_meters_commands(call: CallbackQuery, callback_data: MetersInfo, state: FSMContext):
@@ -328,6 +332,8 @@ async def write_meters_value(message: Message, state: FSMContext):
         # main_result = cursor.fetchall()
         # print(main_result)
         # print(cursor.rowcount)
+        # TODO - необходимо разобраться с возможными вариантами возвращаемого результата выполнения команды
+        #  cursor.execute(query_text) и корректно их отрабатывать
         connection.commit()
         await message.answer(text=f"Для выбранного счетчика '{meter_serial}' "
                                   f"записаны показания:\n '{message.text}'")
