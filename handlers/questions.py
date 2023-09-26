@@ -8,8 +8,8 @@ from middlewares.accounts import get_users_id
 from keyboards.for_questions import get_yes_no_kb
 
 router = Router()
-users_id = get_users_id()
-router.message.filter(UserIdFilter(users_id))
+allowed_users_id = get_users_id()
+router.message.filter(UserIdFilter(allowed_users_id))
 
 @router.message(Command("start"))
 async def cmd_start(message: Message, counter: str):
