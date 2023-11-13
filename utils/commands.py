@@ -17,6 +17,10 @@ async def set_commands(bot: Bot):
             description='Работа со счетчиками'
         ),
         BotCommand(
+            command='request',
+            description='HTTP-запрос'
+        ),
+        BotCommand(
             command='cancel',
             description='Отмена внесения показаний'
         )

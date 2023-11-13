@@ -24,18 +24,26 @@ from utils.callbackdata import MetersInfo
 from utils.MetersEntriesStates import MetersEntries
 from filters.message_filters import IsDigitsCheck
 
+from utils.http_requests import make_request
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from utils.http_requests import make_scheduled_request
+
 
 # Инициализируем хранилище (создаем экземпляр класса MemoryStorage)
 storage: MemoryStorage = MemoryStorage()
 # Создаем объект диспетчера
 dp: Dispatcher = Dispatcher(storage=storage)
 allowed_users_id = get_users_id()
+scheduler = AsyncIOScheduler()
 
 # TODO - необходимо сделать механизм проверки прав пользователя на работу с чатом и БД, ч/з middleware ???
 
 
 async def start_bot(bot: Bot):
     await set_commands(bot)
+    # инициализируем шедулер - добавляем в него функцию make_scheduled_request в модуле http_request,
+    # которая опрашивает овно
+    schedule_jobs()
     await bot.send_message(config.admin_id, text='Бот запущен')
 
 
@@ -61,6 +69,11 @@ async def process_cancel_command_state(message: Message, state: FSMContext):
                               'отправьте команду /meters или выберите нужный пункт меню')
     # Сбрасываем состояние и очищаем данные, полученные внутри состояний
     await state.clear()
+
+
+# функция добавляет задание make_scheduled_request в шедулер, с периодичностью запуска seconds
+def schedule_jobs():
+    scheduler.add_job(make_scheduled_request, "interval", seconds=30)
 
 
 async def get(message: types.Message):
@@ -100,6 +113,9 @@ async def main():
     # # Диспетчер
     # dp = Dispatcher(storage=storage)
 
+    # стартуем шедулер, который будет с определенной периодичностью запускать опрос овна функцией в модуле http_request
+    scheduler.start()
+
     # Мидлварь необходимо регистрировать ранее, чем хэндлеры
     dp.message.middleware.register(CounterMiddleware())
 
@@ -109,6 +125,8 @@ async def main():
     # Обработчик команды вызова инлайн-клавиатуры по счетчикам meters
     # dp.message.register(get_meters_commands, Command(commands='meters'))
     dp.message.register(make_entries_for_meters, Command(commands='meters'))
+
+    dp.message.register(make_request, Command(commands='request'))
 
     # # Обработчик на нажатие кнопок инлайн-клавиатуры meters
     # dp.callback_query.register(select_meters_commands, MetersInfo.filter(), StateFilter(default_state))

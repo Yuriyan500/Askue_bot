@@ -1,6 +1,5 @@
 import re
 from aiogram import F
-from aiogram.types import Message
 from aiogram.types import CallbackQuery, Message
 from utils.callbackdata import MetersInfo
 from utils.dbconnect import create_db_connection

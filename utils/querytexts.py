@@ -150,3 +150,61 @@ def write_meters_value_query_manual(meter_id_pp, meter_value):
         f" EXEC P_Log_HI @ID_Log out, @ID_PP, 5, "
         f" @return_nearest_date, @DT_Old, @return_nearest_date, @Val, @Val_Old, Null ")
     return query_text
+
+
+def write_meters_value_for_specific_half_hour_query(meter_id_pp, sql_time, meter_value):
+
+    if not meter_id_pp:
+        return ''
+
+    query_text = (
+        f"DECLARE	@return_curdate datetime, @return_half_hour datetime, @return_nearest_date datetime, "
+        f" @DT_Old datetime, @Val float,\n "
+        f" @Val_old float, @Minutes int, @return_value int, @IsAdded tinyint, @State int = 0, \n"
+        f" @ID_PP int = 0 \n"
+        f" set @Minutes = 30 \n"
+        f" set @State = 16384 \n"
+        f" set @ID_PP = {meter_id_pp} \n"
+        f" set @Val = {meter_value} \n"
+        f" set @return_half_hour = {sql_time} \n"
+        f"-- находим текущую дату \n"
+        f" EXEC	@return_curdate = [dbo].[FncGetDate] \n"
+        f"-- запускаем процедуру для вытаскивания последнего значения и последней даты, запоминаем их \n "
+        f" SELECT top 1 @DT_Old = DT, @Val_Old = Val \n"
+        f" FROM dbo.PP_NIs_PP({meter_id_pp}, null, @return_curdate) ORDER BY DT DESC\n "
+        f"-- округляем дату до ближайшего временного интервала \n "
+        f"EXEC @return_nearest_date = [dbo].[DT_RoundDateTimeToNearestInterval] @return_half_hour, @Minutes\n"
+        f"-- записываем новое значение в PointNIs_On_Main_Stack через ХП \n "
+        f" EXEC	@return_value = [dbo].[PP_NIs_Write_PP]	@ID_PP,	@DT = @return_nearest_date,	\n"
+        f" @Val = @Val, @State = @State\n"
+        f"-- записываем в логи P_Log_Nfo, P_Log_IDs старые и новые значения \n "
+        f" DECLARE @ID_Log int\n"
+        f" EXEC P_Log_HI @ID_Log out, @ID_PP, 5, "
+        f" @return_nearest_date, @DT_Old, @return_nearest_date, @Val, @Val_Old, Null ")
+    return query_text
+
+def return_max_date_and_id_query():
+
+    query_text = (
+        f"SELECT t1.* FROM [PointNIs_On_Main_Stack] t1"
+        f"  LEFT OUTER JOIN [PointNIs_On_Main_Stack] t2"
+        f"    ON (t1.ID_PP = t2.ID_PP AND t1.DT < t2.DT)"
+        f"WHERE t2.ID_PP IS NULL and t1.ID_PP in (9, 10, 12, 31)"
+    )
+    return query_text
+
+
+def return_serial_and_id_query():
+
+    query_text = (
+        f"select minfo.SN, mmh.ID_Point, pparams.ID_PP "
+        f"from (select mi.ID_MeterInfo, mi.SN from MeterInfo as mi where mi.SN in (1305, 1089, 1169, 6737)) as minfo "
+        f"left join ( "
+        f"SELECT ID_Point, ID_MeterInfo FROM MeterMountHist where ID_Module is NULL "
+        f") as mmh on mmh.ID_MeterInfo = minfo.ID_MeterInfo "
+        f"left join "
+        f"( "
+        f"select pp.ID_PP, pp.ID_Point from (select ID_PP, ID_Point from PointParams where ManuIn = 1) as pp "
+        f") as pparams on mmh.ID_Point = pparams.ID_Point "
+    )
+    return query_text
